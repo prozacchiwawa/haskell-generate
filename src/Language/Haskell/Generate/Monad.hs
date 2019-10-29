@@ -36,7 +36,6 @@ import           Language.Haskell.Exts.Pretty
 import           Language.Haskell.Exts.SrcLoc
 import           Language.Haskell.Exts.Syntax
 import           Language.Haskell.Generate.Expression
-import qualified Language.Haskell.TH as TH
 
 import Prelude
 
@@ -63,17 +62,17 @@ generateExp :: ExpG t -> String
 generateExp = prettyPrint . runExpression . fst . runGenerate
 
 -- | Generate a case expression.
-caseE :: SrcLoc -> ExpG x -> [(Pat SrcLoc, ExpG t)] -> ExpG t
-caseE l v alt = do
+caseE :: ExpG x -> [(Pat SrcLoc, ExpG t)] -> ExpG t
+caseE v alt = do
   v' <- v
 #if MIN_VERSION_haskell_src_exts(1,17,0)
-  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedRhs l $ runExpression a') Nothing) a) alt
+  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedRhs noLoc $ runExpression a') Nothing) a) alt
 #elif MIN_VERSION_haskell_src_exts(1,16,0)
-  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedRhs l $ runExpression a') (BDecls [])) a) alt
+  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedRhs noLoc $ runExpression a') (BDecls [])) a) alt
 #else
-  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedAlt l $ runExpression a') (BDecls [])) a) alt
+  alt' <- mapM (\(p,a) -> fmap (\a' -> Alt noLoc p (UnGuardedAlt noLoc $ runExpression a') (BDecls [])) a) alt
 #endif
-  return $ Expression $ Case l (runExpression v') alt'
+  return $ Expression $ Case noLoc (runExpression v') alt'
 
 -- | Import a function from a module. This function is polymorphic in the type of the resulting expression, 
 -- you should probably only use this function to define type-restricted specializations. 
@@ -143,7 +142,12 @@ instance GenExp Rational where
 
 instance GenExp a => GenExp [a] where
   type GenExpType [a] = [GenExpType a]
-  expr a = Generate $ fmap (Expression . (List noLoc) . map runExpression) $ mapM (unGenerate . expr) a
+  expr a =
+    let
+      elist = mapM (unGenerate . expr) a
+      expressionOfList = Expression . (List noLoc) . map runExpression <$> elist
+    in
+    Generate $ expressionOfList
 
 instance GenExp x => GenExp (ExpG a -> x) where
   type GenExpType (ExpG a -> x) = a -> GenExpType x
