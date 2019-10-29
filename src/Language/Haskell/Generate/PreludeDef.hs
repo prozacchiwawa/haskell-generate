@@ -5,6 +5,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Language.Haskell.Generate.PreludeDef where
 
+import Language.Haskell.Exts.SrcLoc
 import Language.Haskell.Exts.Syntax
 import Language.Haskell.Generate.Monad
 import Language.Haskell.Generate.TH
@@ -32,7 +33,7 @@ fmap concat $ mapM declareFunction
   , 'subtract, 'even, 'odd, 'gcd, 'lcm
   , 'fromIntegral, 'realToFrac
   , 'fmap, 'return, 'mapM, 'mapM_
-  , 'id, 'const, 'flip, 'until, 'asTypeOf, 'undefined
+  , 'id, 'const, 'flip, 'until, 'asTypeOf -- , 'undefined
   , 'map, 'filter, 'head, 'last, 'tail, 'init, 'null, 'length
   , 'reverse, 'foldl, 'foldr, 'foldl1, 'foldr1, 'and, 'or, 'any, 'all, 'sum, 'product
   , 'concat, 'concatMap, 'maximum, 'minimum
@@ -67,22 +68,22 @@ fmap concat $ mapM declareNamedSymbol
 (<>.) a b = dot' <>$ a <>$ b
 
 tuple0 :: ExpG ()
-tuple0 = returnE $ Var $ Special UnitCon
+tuple0 = returnE $ Var noLoc $ Special noLoc $ UnitCon noLoc
 
 tuple2 :: ExpG (a -> b -> (a,b))
-tuple2 = returnE $ Var $ Special $ TupleCon Boxed 2
+tuple2 = returnE $ Var noLoc $ Special noLoc $ TupleCon noLoc Boxed 2
 
 tuple3 :: ExpG (a -> b -> c -> (a,b,c))
-tuple3 = returnE $ Var $ Special $ TupleCon Boxed 3
+tuple3 = returnE $ Var noLoc $ Special noLoc $ TupleCon noLoc Boxed 3
 
 tuple4 :: ExpG (a -> b -> c -> d -> (a,b,c,d))
-tuple4 = returnE $ Var $ Special $ TupleCon Boxed 4
+tuple4 = returnE $ Var noLoc $ Special noLoc $ TupleCon noLoc Boxed 4
 
 tuple5 :: ExpG (a -> b -> c -> d -> (a,b,c,d,e))
-tuple5 = returnE $ Var $ Special $ TupleCon Boxed 5
+tuple5 = returnE $ Var noLoc $ Special noLoc $ TupleCon noLoc Boxed 5
 
 cons :: ExpG (a -> [a] -> [a])
-cons = returnE $ Var $ Special Cons
+cons = returnE $ Var noLoc $ Special noLoc (Cons noLoc)
 
 instance Num t => Num (ExpG t) where
   a + b = add'  <>$ a <>$ b
@@ -90,6 +91,6 @@ instance Num t => Num (ExpG t) where
   a * b = mult' <>$ a <>$ b
   negate a = negate' <>$ a
   abs a    = abs'    <>$ a
-  fromInteger a = returnE $ Lit $ Int a
+  fromInteger a = returnE $ Lit noLoc $ Int noLoc a (show a)
   signum a = signum' <>$ a
 

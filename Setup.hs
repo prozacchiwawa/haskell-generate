@@ -3,15 +3,18 @@ module Main (main) where
 
 import Data.IORef
 import Data.List ( nub )
-import Data.Version ( showVersion )
-import Distribution.Package ( PackageName(PackageName), PackageId, InstalledPackageId, packageVersion, packageName )
+import Data.Version ( showVersion, makeVersion )
+import Distribution.Package ( PackageId, PackageIdentifier (..), UnitId, unPackageName, mkPackageName, pkgName, pkgVersion )
 import Distribution.PackageDescription ( PackageDescription(), TestSuite(..), hsSourceDirs, libBuildInfo, buildInfo)
-import Distribution.Simple ( defaultMainWithHooks, UserHooks(..), simpleUserHooks )
-import Distribution.Simple.BuildPaths ( autogenModulesDir )
+import Distribution.Simple ( defaultMainWithHooks, UserHooks(..), simpleUserHooks, versionNumbers )
+import Distribution.Simple.BuildPaths ( autogenPackageModulesDir )
 import Distribution.Simple.LocalBuildInfo ( withLibLBI, withTestLBI, withExeLBI, ComponentLocalBuildInfo(), LocalBuildInfo(), componentPackageDeps )
 import Distribution.Simple.Setup ( BuildFlags(buildVerbosity), fromFlag, buildDistPref, defaultDistPref, fromFlagOrDefault )
-import Distribution.Simple.Utils ( rewriteFile, createDirectoryIfMissingVerbose )
-import Distribution.Verbosity ( Verbosity )
+import Distribution.Simple.Utils ( rewriteFileEx, createDirectoryIfMissingVerbose )
+import Distribution.Types.MungedPackageId ( mungedName, mungedVersion )
+import Distribution.Types.MungedPackageName ( unMungedPackageName )
+import Distribution.Types.UnqualComponentName ( unUnqualComponentName )
+import Distribution.Verbosity ( Verbosity, normal )
 import System.Directory ( canonicalizePath )
 import System.FilePath ( (</>) )
 
@@ -34,7 +37,7 @@ appendDL x y = x . y
 
 generateBuildModule :: Verbosity -> PackageDescription -> LocalBuildInfo -> BuildFlags -> IO ()
 generateBuildModule verbosity pkg lbi flags = do
-  let dir = autogenModulesDir lbi
+  let dir = autogenPackageModulesDir lbi
   createDirectoryIfMissingVerbose verbosity True dir
   withTestLBI pkg lbi $ \suite suitelbi -> do
     srcDirs <- mapM canonicalizePath $ hsSourceDirs $ testBuildInfo suite
@@ -47,8 +50,8 @@ generateBuildModule verbosity pkg lbi flags = do
       modifyIORef depsVar $ appendDL . singletonDL $ depsEntry (buildInfo exe) exelbi suitelbi
     deps <- fmap ($ []) $ readIORef depsVar
 
-    rewriteFile (map fixchar $ dir </> "Build_" ++ testName suite ++ ".hs") $ unlines 
-      [ "module Build_" ++ map fixchar (testName suite) ++ " where"
+    rewriteFileEx normal (map fixchar $ dir </> "Build_" ++ uqTestName suite ++ ".hs") $ unlines 
+      [ "module Build_" ++ map fixchar (uqTestName suite) ++ " where"
       , "getDistDir :: FilePath"
       , "getDistDir = " ++ show distDir
       , "getSrcDirs :: [FilePath]"
@@ -59,11 +62,17 @@ generateBuildModule verbosity pkg lbi flags = do
 
   where
     formatdeps = map (formatone . snd)
-    formatone p = case packageName p of
-      PackageName n -> n ++ "-" ++ showVersion (packageVersion p)
+    formatone p = (unPackageName $ pkgName p) ++ "-" ++ showVersion (vPackageVersion p)
     depsEntry targetbi targetlbi suitelbi = (hsSourceDirs targetbi, formatdeps $ testDeps targetlbi suitelbi)
     fixchar '-' = '_'
     fixchar c = c
+    uqTestName p = unUnqualComponentName $ testName p
+    vPackageVersion p = makeVersion $ versionNumbers $ pkgVersion p
 
-testDeps :: ComponentLocalBuildInfo -> ComponentLocalBuildInfo -> [(InstalledPackageId, PackageId)]
-testDeps xs ys = nub $ componentPackageDeps xs ++ componentPackageDeps ys
+testDeps :: ComponentLocalBuildInfo -> ComponentLocalBuildInfo -> [(UnitId, PackageId)]
+testDeps xs ys = cvt <$> nub (componentPackageDeps xs ++ componentPackageDeps ys)
+  where
+    cvt (unit,mpd) =
+      ( unit
+      , PackageIdentifier (mkPackageName $ unMungedPackageName $ mungedName mpd) $ mungedVersion mpd
+      )

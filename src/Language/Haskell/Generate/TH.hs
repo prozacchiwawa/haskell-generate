@@ -9,6 +9,7 @@ module Language.Haskell.Generate.TH
   ) where
 
 import Data.Char
+import Language.Haskell.Exts.SrcLoc
 import Language.Haskell.Exts.Syntax hiding (Name)
 import Language.Haskell.Generate.Monad hiding (Name)
 import Language.Haskell.TH
@@ -25,15 +26,15 @@ declareNamedThing :: (Name, String, Name) -> DecsQ
 declareNamedThing (thing, name, thingClass) = do
   info <- reify thing
   typ <- case info of
-    VarI _ t _ _ -> return t
-    ClassOpI _ t _ _ -> return t
-    DataConI _ t _ _ -> return t    
+    VarI _ t _ -> return t
+    ClassOpI _ t _ -> return t
+    DataConI _ t _ -> return t
     _ -> fail $ "Not a function: " ++ nameBase thing
   md <- maybe (fail "No module name for function!") return $ nameModule thing
   sequence
     [ sigD (mkName name) $ return $ overQuantifiedType (ConT ''ExpG `AppT`) typ
     , funD (mkName name) $ return $ flip (clause []) [] $ normalB 
-        [| useValue $(lift md) $ $(conE thingClass) $(lift $ nameBase thing) |]
+        [| useValue $(lift md) $ $(conE thingClass) noLoc $(lift $ nameBase thing) |]
     ]
 
   where overQuantifiedType f (ForallT bnds ctx t) = ForallT (map removeKind bnds) ctx $ overQuantifiedType f t
