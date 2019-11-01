@@ -34,8 +34,9 @@ import           Data.Maybe
 import qualified Data.Set as S
 import           Language.Haskell.Exts.Pretty
 import           Language.Haskell.Exts.SrcLoc
-import           Language.Haskell.Exts.Syntax
+import           Language.Haskell.Exts.Syntax as Syntax
 import           Language.Haskell.Generate.Expression
+import qualified Language.Haskell.TH as HTH
 
 import Prelude
 
@@ -151,7 +152,7 @@ instance GenExp a => GenExp [a] where
 
 instance GenExp x => GenExp (ExpG a -> x) where
   type GenExpType (ExpG a -> x) = a -> GenExpType x
-  expr f = do 
+  expr f = do
     pvarName <- newName "pvar_"
     body <- expr $ f $ return $ Expression $ Var noLoc $ UnQual noLoc pvarName
     return $ Expression $ Lambda noLoc [PVar noLoc pvarName] $ runExpression body
@@ -242,6 +243,19 @@ addDecl name e = ModuleM $ do
   tell (mods, [FunBind [Match noLoc name [] Nothing (UnGuardedRhs $ runExpression body) $ BDecls []]])
 #endif
   return $ FunRef name
+
+addNamelessDecl :: Syntax.Decl SrcLoc -> ModuleM ()
+addNamelessDecl d = ModuleM $ do
+  let (_, mods) = runGenerate (expr (0 :: Integer))
+  tell (mods, [d])
+  pure ()
+
+-- | e :: ExpG t is provided to represent the type of the expression named by Name.
+addNamedDecl :: Name SrcLoc -> ExpG t -> Syntax.Decl SrcLoc -> ModuleM (FunRef t)
+addNamedDecl name e d = ModuleM $ do
+  let (_, mods) = runGenerate (expr (0 :: Integer))
+  tell (mods, [d])
+  pure $ FunRef name
 
 -- | Extract the Module from a module generator.
 runModuleM :: ModuleG -> String -> Module SrcLoc
