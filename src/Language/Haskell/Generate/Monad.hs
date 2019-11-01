@@ -22,6 +22,8 @@ module Language.Haskell.Generate.Monad
   , runModuleM
   , generateModule
   , generateExp
+  , addNamedDecl
+  , addNamelessDecl
   )
   where
 
